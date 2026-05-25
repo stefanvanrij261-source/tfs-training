@@ -1788,13 +1788,12 @@ function createBalancedGroups(children, targetSize) {
 
   const childById = new Map(children.map((child) => [child.id, child]));
   const friendComponents = buildFriendComponents(children);
-  const averageLevel = children.reduce((sum, child) => sum + getLevelValue(child), 0) / children.length;
-  const averageAge = children.reduce((sum, child) => sum + getAgeValue(child), 0) / children.length;
-  const buckets = Array.from({ length: Math.max(1, Math.ceil(children.length / targetSize)) }, () => ({
+  const buckets = getDesiredGroupSizes(children.length, targetSize).map((desiredSize) => ({
     components: [],
     members: [],
     levelSum: 0,
     ageSum: 0,
+    desiredSize,
   }));
 
   friendComponents.forEach((component) => {
@@ -1807,6 +1806,23 @@ function createBalancedGroups(children, targetSize) {
     }
   });
 
+  const exactBuckets = findBestExactGrouping(
+    friendComponents,
+    getDesiredGroupSizes(children.length, targetSize),
+    children,
+  );
+
+  if (exactBuckets) {
+    return {
+      groups: exactBuckets.map((bucket) => ({
+        ...bucket,
+        members: bucket.members.sort((first, second) => getLevelValue(second) - getLevelValue(first)),
+      })),
+      warnings,
+      childById,
+    };
+  }
+
   friendComponents
     .sort(
       (first, second) =>
@@ -1815,13 +1831,17 @@ function createBalancedGroups(children, targetSize) {
         first.ageAverage - second.ageAverage,
     )
     .forEach((component) => {
-      const fittingBuckets = buckets.filter((bucket) => canPlaceComponent(bucket, component, targetSize));
+      const fittingBuckets = buckets.filter((bucket) => canPlaceComponent(bucket, component, bucket.desiredSize));
       const candidates = fittingBuckets;
 
       if (!candidates.length) {
         if (component.members.length > targetSize) {
           warnings.push(
             `${component.members.map((child) => child.name).join(", ")} blijft samen als vriendengroep en is groter dan de ingestelde groepsgrootte.`,
+          );
+        } else {
+          warnings.push(
+            `${component.members.map((child) => child.name).join(", ")} kon door no-go's niet in een bestaande groep worden geplaatst.`,
           );
         }
 
@@ -1830,19 +1850,19 @@ function createBalancedGroups(children, targetSize) {
           members: [...component.members],
           levelSum: component.levelSum,
           ageSum: component.ageSum,
+          desiredSize: Math.max(targetSize, component.members.length),
         });
         return;
       }
 
       candidates.sort(
         (first, second) =>
-          getBucketScore(first, component, targetSize, averageLevel, averageAge, candidates) -
-          getBucketScore(second, component, targetSize, averageLevel, averageAge, candidates),
+          getBucketScore(first, component) - getBucketScore(second, component),
       );
       placeComponentInBucket(candidates[0], component);
     });
 
-  compactUnderfilledBuckets(buckets, targetSize);
+  compactUnderfilledBuckets(buckets);
 
   return {
     groups: buckets
@@ -1854,6 +1874,112 @@ function createBalancedGroups(children, targetSize) {
     warnings,
     childById,
   };
+}
+
+function findBestExactGrouping(components, desiredSizes, children) {
+  if (components.length > 18) {
+    return null;
+  }
+
+  const averageLevel = children.reduce((sum, child) => sum + getLevelValue(child), 0) / children.length;
+  const averageAge = children.reduce((sum, child) => sum + getAgeValue(child), 0) / children.length;
+  const buckets = desiredSizes.map((desiredSize) => ({
+    components: [],
+    members: [],
+    levelSum: 0,
+    ageSum: 0,
+    desiredSize,
+  }));
+  const sortedComponents = [...components].sort(
+    (first, second) =>
+      second.members.length - first.members.length ||
+      Math.abs(second.levelAverage - averageLevel) - Math.abs(first.levelAverage - averageLevel) ||
+      second.levelAverage - first.levelAverage,
+  );
+  let bestBuckets = null;
+  let bestScore = Infinity;
+  let attempts = 0;
+  const maxAttempts = 200000;
+
+  function search(index) {
+    attempts += 1;
+
+    if (attempts > maxAttempts) {
+      return;
+    }
+
+    if (index === sortedComponents.length) {
+      if (buckets.some((bucket) => bucket.members.length !== bucket.desiredSize)) {
+        return;
+      }
+
+      const score = getGroupingScore(buckets, averageLevel, averageAge);
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestBuckets = cloneBuckets(buckets);
+      }
+
+      return;
+    }
+
+    const component = sortedComponents[index];
+    const triedEmptySizes = new Set();
+    const candidates = buckets
+      .filter((bucket) => canPlaceComponent(bucket, component, bucket.desiredSize))
+      .sort((first, second) => first.members.length - second.members.length);
+
+    for (const bucket of candidates) {
+      if (!bucket.members.length) {
+        if (triedEmptySizes.has(bucket.desiredSize)) {
+          continue;
+        }
+
+        triedEmptySizes.add(bucket.desiredSize);
+      }
+
+      placeComponentInBucket(bucket, component);
+      search(index + 1);
+      removeComponentFromBucket(bucket, component);
+    }
+  }
+
+  search(0);
+  return bestBuckets;
+}
+
+function getGroupingScore(buckets, averageLevel, averageAge) {
+  return buckets.reduce((score, bucket) => {
+    const levelAverage = bucket.levelSum / bucket.members.length;
+    const ageAverage = bucket.ageSum / bucket.members.length;
+    const levelPenalty = Math.abs(levelAverage - averageLevel) * 100;
+    const agePenalty = Math.abs(ageAverage - averageAge) * 1.2;
+
+    return score + levelPenalty + agePenalty;
+  }, 0);
+}
+
+function cloneBuckets(buckets) {
+  return buckets.map((bucket) => ({
+    components: [...bucket.components],
+    members: [...bucket.members],
+    levelSum: bucket.levelSum,
+    ageSum: bucket.ageSum,
+    desiredSize: bucket.desiredSize,
+  }));
+}
+
+function getDesiredGroupSizes(childCount, targetSize) {
+  const groupCount = Math.max(1, Math.ceil(childCount / targetSize));
+  const remainder = childCount % targetSize;
+
+  return Array.from({ length: groupCount }, (_, index) => {
+    if (remainder && index === groupCount - 1) {
+      return remainder;
+    }
+
+    return targetSize;
+  });
 }
 
 function placeComponentInBucket(bucket, component) {
@@ -1881,13 +2007,13 @@ function removeComponentFromBucket(bucket, component) {
   bucket.ageSum -= component.ageSum;
 }
 
-function compactUnderfilledBuckets(buckets, targetSize) {
+function compactUnderfilledBuckets(buckets) {
   let moved = true;
 
   while (moved) {
     moved = false;
     const underfilledBuckets = buckets
-      .filter((bucket) => bucket.members.length && bucket.members.length < targetSize)
+      .filter((bucket) => bucket.members.length && bucket.members.length < bucket.desiredSize)
       .sort((first, second) => first.members.length - second.members.length);
 
     if (underfilledBuckets.length <= 1) {
@@ -1898,7 +2024,7 @@ function compactUnderfilledBuckets(buckets, targetSize) {
 
     for (const component of [...sourceBucket.components]) {
       const targetBucket = buckets
-        .filter((bucket) => bucket !== sourceBucket && canPlaceComponent(bucket, component, targetSize))
+        .filter((bucket) => bucket !== sourceBucket && canPlaceComponent(bucket, component, bucket.desiredSize))
         .sort((first, second) => second.members.length - first.members.length)[0];
 
       if (targetBucket) {
@@ -1970,21 +2096,20 @@ function canPlaceComponent(bucket, component, maxSize) {
   );
 }
 
-function getBucketScore(bucket, component, targetSize, averageLevel, averageAge, candidates) {
-  const nonEmptyCandidateExists = candidates.some((candidate) => candidate.members.length);
-
+function getBucketScore(bucket, component) {
   if (!bucket.members.length) {
-    return nonEmptyCandidateExists ? 18 : 0;
+    return -12;
   }
 
   const nextSize = bucket.members.length + component.members.length;
-  const nextLevelAverage = (bucket.levelSum + component.levelSum) / nextSize;
   const nextAgeAverage = (bucket.ageSum + component.ageSum) / nextSize;
-  const levelPenalty = Math.abs(nextLevelAverage - averageLevel) * 9;
-  const agePenalty = Math.abs(nextAgeAverage - averageAge) * 0.35;
-  const fillPenalty = (targetSize - nextSize) * 2;
+  const currentLevelAverage = bucket.levelSum / bucket.members.length;
+  const currentAgeAverage = bucket.ageSum / bucket.members.length;
+  const levelPriority = currentLevelAverage * 12;
+  const ageTiebreaker = Math.abs(nextAgeAverage - currentAgeAverage) * 0.15;
+  const almostFullBonus = nextSize === bucket.desiredSize ? -0.4 : 0;
 
-  return levelPenalty + agePenalty + fillPenalty;
+  return levelPriority + ageTiebreaker + almostFullBonus;
 }
 
 function groupBuilderResultTemplate(result) {
