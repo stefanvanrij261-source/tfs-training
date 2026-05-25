@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Startpagina App</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Hoofdmenu">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">
+            <img src="tfs_logo.jpg" alt="" />
+          </div>
+          <div class="brand-text">
+            <strong>TFS</strong>
+            <span>Jeugdtraining</span>
+          </div>
+          <button class="icon-button close-menu" id="closeMenu" type="button" aria-label="Menu sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <nav class="menu-list" aria-label="Navigatie">
+          <button class="menu-item active" type="button" data-section="opties">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+              <path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1a2.1 2.1 0 0 1-3 3l-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7v.2a2.1 2.1 0 0 1-4.2 0v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1a2.1 2.1 0 0 1-3-3l.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1H2a2.1 2.1 0 0 1 0-4.2h.2a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1a2.1 2.1 0 0 1 3-3l.1.1a1.8 1.8 0 0 0 2 .4h.1a1.8 1.8 0 0 0 1-1.7V2a2.1 2.1 0 0 1 4.2 0v.2a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1a2.1 2.1 0 0 1 3 3l-.1.1a1.8 1.8 0 0 0-.4 2v.1a1.8 1.8 0 0 0 1.7 1H22a2.1 2.1 0 0 1 0 4.2h-.2a1.8 1.8 0 0 0-1.7 1.1Z" />
+            </svg>
+            <span>Opties</span>
+          </button>
+          <button class="menu-item" type="button" data-section="groepen">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+              <path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.9" />
+              <path d="M16 3.1a4 4 0 0 1 0 7.8" />
+            </svg>
+            <span>Groepen</span>
+          </button>
+          <button class="menu-item" type="button" data-section="groepenMaken">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+              <path d="M19 8v6" />
+              <path d="M16 11h6" />
+            </svg>
+            <span>Groepen maken</span>
+          </button>
+          <button class="menu-item" type="button" data-section="niveaus">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19V5" />
+              <path d="M4 19h16" />
+              <path d="M8 17V9" />
+              <path d="M12 17V6" />
+              <path d="M16 17v-4" />
+            </svg>
+            <span>Niveaus</span>
+          </button>
+          <button class="menu-item" type="button" data-section="evaluatie">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <span>Evaluatie</span>
+          </button>
+          <button class="menu-item" type="button" data-section="trainingen">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 3v18" />
+              <path d="M18 3v18" />
+              <path d="M3 8h18" />
+              <path d="M3 16h18" />
+              <path d="M10 8v8" />
+              <path d="M14 8v8" />
+            </svg>
+            <span>Trainingen</span>
+          </button>
+          <button class="menu-item" type="button" data-section="kalender">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 2v4M16 2v4M3 10h18" />
+              <path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+            </svg>
+            <span>Kalender</span>
+          </button>
+          <button class="menu-item" type="button" data-section="nieuws">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+              <path d="M8 7h8" />
+              <path d="M8 11h7" />
+            </svg>
+            <span>Nieuws</span>
+          </button>
+        </nav>
+      </aside>
+
+      <div class="scrim" id="scrim" hidden></div>
+
+      <main class="workspace">
+        <header class="topbar">
+          <button class="icon-button menu-toggle" id="openMenu" type="button" aria-label="Menu openen">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div>
+            <p class="eyebrow">Welkom terug</p>
+            <h1 id="pageTitle">Opties</h1>
+          </div>
+          <button class="profile-button" type="button" aria-label="Profiel">
+            <span>LV</span>
+          </button>
+        </header>
+
+        <section class="overview-grid" aria-label="Overzicht">
+          <article class="summary-tile accent-green">
+            <span class="tile-label">Jeugdgroepen</span>
+            <strong id="groupCount">0</strong>
+            <small id="groupSummary">Nog geen groepen aangemaakt</small>
+          </article>
+          <article class="summary-tile accent-blue">
+            <span class="tile-label">Trainingen</span>
+            <strong id="trainingCount">0</strong>
+            <small id="trainingSummary">Nog geen trainingen gemaakt</small>
+          </article>
+          <article class="summary-tile accent-amber">
+            <span class="tile-label">Niveaus</span>
+            <strong>5</strong>
+            <small>1 evaluatie open</small>
+          </article>
+        </section>
+
+        <section class="content-panel" aria-live="polite">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="sectionKicker">Snel instellen</p>
+              <h2 id="sectionHeading">Kies wat je wilt beheren</h2>
+            </div>
+            <button class="primary-action" type="button" id="primaryAction">Nieuw item</button>
+          </div>
+          <div class="section-content" id="sectionContent"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
