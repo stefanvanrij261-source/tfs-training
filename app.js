@@ -128,6 +128,8 @@ const TRAINING_TEMPLATE_STORAGE_KEY = "clubstart-training-sjablonen";
 const CURRENT_USER_STORAGE_KEY = "clubstart-current-user";
 const IGNORED_CREATOR_STORAGE_KEY = "clubstart-genegeerde-makers";
 const SYNC_ENDPOINT = "/api/state";
+const SHARED_STATE_VERSION_STORAGE_KEY = "clubstart-shared-state-version";
+const SYNC_POLL_INTERVAL_MS = 5000;
 const loginUsers = {
   stefan: "tfsontop",
   trainer: "trainer",
@@ -217,6 +219,8 @@ let currentUser = loadCurrentUser();
 let ignoredCreatorNotices = loadIgnoredCreatorNotices();
 let syncMode = "local";
 let remoteSyncReady = false;
+let sharedStateVersion = Number(localStorage.getItem(SHARED_STATE_VERSION_STORAGE_KEY) || 0);
+let lastLocalWriteAt = 0;
 
 function renderLogin(message = "") {
   updateAppStateClasses();
@@ -2136,7 +2140,7 @@ function findBestExactGrouping(components, desiredSizes, children) {
         return;
       }
 
-      const score = getGroupingScore(buckets, averageLevel, averageAge);
+      const score = getGroupingScore(buckets);
 
       if (score < bestScore) {
         bestScore = score;
@@ -2171,15 +2175,25 @@ function findBestExactGrouping(components, desiredSizes, children) {
   return bestBuckets;
 }
 
-function getGroupingScore(buckets, averageLevel, averageAge) {
+function getGroupingScore(buckets) {
   return buckets.reduce((score, bucket) => {
-    const levelAverage = bucket.levelSum / bucket.members.length;
-    const ageAverage = bucket.ageSum / bucket.members.length;
-    const levelPenalty = Math.abs(levelAverage - averageLevel) * 100;
-    const agePenalty = Math.abs(ageAverage - averageAge) * 1.2;
+    const levels = bucket.members.map((child) => getLevelValue(child));
+    const ages = bucket.members.map((child) => getAgeValue(child));
+    const levelPenalty = getValueVariance(levels) * 140 + (Math.max(...levels) - Math.min(...levels)) * 18;
+    const agePenalty = getValueVariance(ages) * 0.08;
 
     return score + levelPenalty + agePenalty;
   }, 0);
+}
+
+function getValueVariance(values) {
+  if (!values.length) {
+    return 0;
+  }
+
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+
+  return values.reduce((sum, value) => sum + Math.pow(value - average, 2), 0) / values.length;
 }
 
 function cloneBuckets(buckets) {
@@ -2321,14 +2335,14 @@ function canPlaceComponent(bucket, component, maxSize) {
 
 function getBucketScore(bucket, component) {
   if (!bucket.members.length) {
-    return -12;
+    return 0;
   }
 
   const nextSize = bucket.members.length + component.members.length;
   const nextAgeAverage = (bucket.ageSum + component.ageSum) / nextSize;
   const currentLevelAverage = bucket.levelSum / bucket.members.length;
   const currentAgeAverage = bucket.ageSum / bucket.members.length;
-  const levelPriority = currentLevelAverage * 12;
+  const levelPriority = Math.abs(currentLevelAverage - component.levelAverage) * 18;
   const ageTiebreaker = Math.abs(nextAgeAverage - currentAgeAverage) * 0.15;
   const almostFullBonus = nextSize === bucket.desiredSize ? -0.4 : 0;
 
@@ -2409,11 +2423,18 @@ function getSerializableState() {
     youthGroups,
     trainingPlans,
     trainingTemplates,
+    updatedAt: Date.now(),
   };
 }
 
-function applySharedState(state) {
+function applySharedState(state, { force = false } = {}) {
   if (!state || typeof state !== "object") {
+    return;
+  }
+
+  const incomingVersion = Number(state.updatedAt || 0);
+
+  if (!force && incomingVersion && incomingVersion <= sharedStateVersion) {
     return;
   }
 
@@ -2422,13 +2443,20 @@ function applySharedState(state) {
     : [];
   trainingPlans = Array.isArray(state.trainingPlans) ? state.trainingPlans : [];
   trainingTemplates = Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [];
+  sharedStateVersion = incomingVersion || Date.now();
+  localStorage.setItem(SHARED_STATE_VERSION_STORAGE_KEY, String(sharedStateVersion));
   saveGroups(false);
   saveTrainingPlans(false);
   saveTrainingTemplates(false);
+  rerenderCurrentSection();
 }
 
 function canUseRemoteSync() {
   return window.location.protocol === "http:" || window.location.protocol === "https:";
+}
+
+function isVercelDeployment() {
+  return window.location.hostname.includes("vercel.app");
 }
 
 async function loadSharedState() {
@@ -2452,14 +2480,42 @@ async function loadSharedState() {
     if (isSharedStateEmpty(state) && hasLocalSharedData()) {
       saveSharedState();
     } else {
-      applySharedState(state);
+      applySharedState(state, { force: true });
     }
   } catch {
-    syncMode = "local";
+    syncMode = isVercelDeployment() ? "offline" : "local";
     remoteSyncReady = false;
   }
 
   updateSyncSummary();
+}
+
+async function pollSharedState({ force = false } = {}) {
+  if (document.hidden || !canUseRemoteSync()) {
+    return;
+  }
+
+  if (!force && Date.now() - lastLocalWriteAt < 1200) {
+    return;
+  }
+
+  try {
+    const response = await fetch(SYNC_ENDPOINT, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error("Sync niet beschikbaar");
+    }
+
+    const state = await response.json();
+    syncMode = "shared";
+    remoteSyncReady = true;
+    applySharedState(state, { force });
+    updateSyncSummary();
+  } catch {
+    syncMode = isVercelDeployment() ? "offline" : "local";
+    remoteSyncReady = false;
+    updateSyncSummary();
+  }
 }
 
 function isSharedStateEmpty(state) {
@@ -2480,12 +2536,17 @@ function saveSharedState() {
     return;
   }
 
+  const state = getSerializableState();
+  sharedStateVersion = state.updatedAt;
+  lastLocalWriteAt = sharedStateVersion;
+  localStorage.setItem(SHARED_STATE_VERSION_STORAGE_KEY, String(sharedStateVersion));
+
   fetch(SYNC_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(getSerializableState()),
+    body: JSON.stringify(state),
   })
     .then((response) => {
       if (!response.ok) {
@@ -2493,10 +2554,27 @@ function saveSharedState() {
       }
     })
     .catch(() => {
-      syncMode = "local";
+      syncMode = isVercelDeployment() ? "offline" : "local";
       remoteSyncReady = false;
       updateSyncSummary();
     });
+}
+
+function rerenderCurrentSection() {
+  if (!currentUser) {
+    return;
+  }
+
+  updateGroupSummary();
+  updateTrainingSummary();
+
+  const activeSection = document.querySelector(".menu-item.active")?.dataset.section;
+
+  if (!activeSection || document.querySelector("#groupForm") || document.querySelector("#trainingForm")) {
+    return;
+  }
+
+  renderSection(activeSection);
 }
 
 function updateSyncSummary() {
@@ -2504,7 +2582,13 @@ function updateSyncSummary() {
     return;
   }
 
-  syncSummary.textContent = syncMode === "shared" ? "Gedeelde opslag actief" : "Lokale opslag";
+  const labels = {
+    shared: "Gedeelde opslag actief",
+    offline: "Gedeelde opslag niet bereikbaar",
+    local: "Lokale opslag",
+  };
+
+  syncSummary.textContent = labels[syncMode] || labels.local;
 }
 
 function loadGroups() {
@@ -2767,6 +2851,12 @@ document.addEventListener("click", (event) => {
 });
 window.addEventListener("resize", updateAppStateClasses);
 window.addEventListener("orientationchange", updateAppStateClasses);
+window.addEventListener("focus", () => pollSharedState({ force: true }));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    pollSharedState({ force: true });
+  }
+});
 
 async function initializeApp() {
   updateProfileButton();
@@ -2778,6 +2868,7 @@ async function initializeApp() {
   updateGroupSummary();
   updateTrainingSummary();
   renderSection(currentUser ? "opties" : "login");
+  setInterval(pollSharedState, SYNC_POLL_INTERVAL_MS);
 }
 
 initializeApp();

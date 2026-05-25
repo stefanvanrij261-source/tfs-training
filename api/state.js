@@ -5,6 +5,7 @@ const emptyState = {
   youthGroups: [],
   trainingPlans: [],
   trainingTemplates: [],
+  updatedAt: 0,
 };
 
 function cleanState(state = {}) {
@@ -12,6 +13,7 @@ function cleanState(state = {}) {
     youthGroups: Array.isArray(state.youthGroups) ? state.youthGroups : [],
     trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [],
     trainingTemplates: Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [],
+    updatedAt: Number(state.updatedAt || Date.now()),
   };
 }
 
