@@ -2486,11 +2486,17 @@ function saveSharedState() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(getSerializableState()),
-  }).catch(() => {
-    syncMode = "local";
-    remoteSyncReady = false;
-    updateSyncSummary();
-  });
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Opslaan mislukt");
+      }
+    })
+    .catch(() => {
+      syncMode = "local";
+      remoteSyncReady = false;
+      updateSyncSummary();
+    });
 }
 
 function updateSyncSummary() {
