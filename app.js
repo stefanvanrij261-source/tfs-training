@@ -116,6 +116,7 @@ const groupCount = document.querySelector("#groupCount");
 const groupSummary = document.querySelector("#groupSummary");
 const trainingCount = document.querySelector("#trainingCount");
 const trainingSummary = document.querySelector("#trainingSummary");
+const syncSummary = document.querySelector("#syncSummary");
 const profileButton = document.querySelector("#profileButton");
 const profileInitials = document.querySelector("#profileInitials");
 const profileMenu = document.querySelector("#profileMenu");
@@ -126,6 +127,7 @@ const TRAINING_STORAGE_KEY = "clubstart-trainingen";
 const TRAINING_TEMPLATE_STORAGE_KEY = "clubstart-training-sjablonen";
 const CURRENT_USER_STORAGE_KEY = "clubstart-current-user";
 const IGNORED_CREATOR_STORAGE_KEY = "clubstart-genegeerde-makers";
+const SYNC_ENDPOINT = "/api/state";
 const loginUsers = {
   stefan: "tfsontop",
   trainer: "trainer",
@@ -213,6 +215,8 @@ let pendingTrainingDraft = null;
 let isChoosingTrainingDate = false;
 let currentUser = loadCurrentUser();
 let ignoredCreatorNotices = loadIgnoredCreatorNotices();
+let syncMode = "local";
+let remoteSyncReady = false;
 
 function renderLogin(message = "") {
   updateAppStateClasses();
@@ -2400,6 +2404,103 @@ function getAgeValue(child) {
   return Number(child?.age) || 0;
 }
 
+function getSerializableState() {
+  return {
+    youthGroups,
+    trainingPlans,
+    trainingTemplates,
+  };
+}
+
+function applySharedState(state) {
+  if (!state || typeof state !== "object") {
+    return;
+  }
+
+  youthGroups = Array.isArray(state.youthGroups)
+    ? state.youthGroups.map((group) => normalizeGroupRelationships(group))
+    : [];
+  trainingPlans = Array.isArray(state.trainingPlans) ? state.trainingPlans : [];
+  trainingTemplates = Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [];
+  saveGroups(false);
+  saveTrainingPlans(false);
+  saveTrainingTemplates(false);
+}
+
+function canUseRemoteSync() {
+  return window.location.protocol === "http:" || window.location.protocol === "https:";
+}
+
+async function loadSharedState() {
+  if (!canUseRemoteSync()) {
+    syncMode = "local";
+    remoteSyncReady = false;
+    updateSyncSummary();
+    return;
+  }
+
+  try {
+    const response = await fetch(SYNC_ENDPOINT, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error("Sync niet beschikbaar");
+    }
+
+    const state = await response.json();
+    syncMode = "shared";
+    remoteSyncReady = true;
+    if (isSharedStateEmpty(state) && hasLocalSharedData()) {
+      saveSharedState();
+    } else {
+      applySharedState(state);
+    }
+  } catch {
+    syncMode = "local";
+    remoteSyncReady = false;
+  }
+
+  updateSyncSummary();
+}
+
+function isSharedStateEmpty(state) {
+  return (
+    !Array.isArray(state?.youthGroups) ||
+    !Array.isArray(state?.trainingPlans) ||
+    !Array.isArray(state?.trainingTemplates) ||
+    (!state.youthGroups.length && !state.trainingPlans.length && !state.trainingTemplates.length)
+  );
+}
+
+function hasLocalSharedData() {
+  return youthGroups.length > 0 || trainingPlans.length > 0 || trainingTemplates.length > 0;
+}
+
+function saveSharedState() {
+  if (!remoteSyncReady || !canUseRemoteSync()) {
+    return;
+  }
+
+  fetch(SYNC_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(getSerializableState()),
+  }).catch(() => {
+    syncMode = "local";
+    remoteSyncReady = false;
+    updateSyncSummary();
+  });
+}
+
+function updateSyncSummary() {
+  if (!syncSummary) {
+    return;
+  }
+
+  syncSummary.textContent = syncMode === "shared" ? "Gedeelde opslag actief" : "Lokale opslag";
+}
+
 function loadGroups() {
   try {
     const savedGroups = localStorage.getItem(GROUP_STORAGE_KEY);
@@ -2449,27 +2550,39 @@ function loadIgnoredCreatorNotices() {
   }
 }
 
-function saveGroups() {
+function saveGroups(sync = true) {
   try {
     localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(youthGroups));
   } catch {
     // De app blijft werken, ook als de browser opslag blokkeert.
   }
+
+  if (sync) {
+    saveSharedState();
+  }
 }
 
-function saveTrainingPlans() {
+function saveTrainingPlans(sync = true) {
   try {
     localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(trainingPlans));
   } catch {
     // De app blijft werken, ook als de browser opslag blokkeert.
   }
+
+  if (sync) {
+    saveSharedState();
+  }
 }
 
-function saveTrainingTemplates() {
+function saveTrainingTemplates(sync = true) {
   try {
     localStorage.setItem(TRAINING_TEMPLATE_STORAGE_KEY, JSON.stringify(trainingTemplates));
   } catch {
     // De app blijft werken, ook als de browser opslag blokkeert.
+  }
+
+  if (sync) {
+    saveSharedState();
   }
 }
 
@@ -2649,8 +2762,16 @@ document.addEventListener("click", (event) => {
 window.addEventListener("resize", updateAppStateClasses);
 window.addEventListener("orientationchange", updateAppStateClasses);
 
-updateProfileButton();
-updateAppStateClasses();
-updateGroupSummary();
-updateTrainingSummary();
-renderSection(currentUser ? "opties" : "login");
+async function initializeApp() {
+  updateProfileButton();
+  updateAppStateClasses();
+  updateGroupSummary();
+  updateTrainingSummary();
+  updateSyncSummary();
+  await loadSharedState();
+  updateGroupSummary();
+  updateTrainingSummary();
+  renderSection(currentUser ? "opties" : "login");
+}
+
+initializeApp();
