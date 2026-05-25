@@ -152,6 +152,36 @@ button {
   padding: 26px;
 }
 
+.logged-out .app-shell {
+  display: block;
+  min-height: 100vh;
+}
+
+.logged-out .sidebar,
+.logged-out .topbar,
+.logged-out .overview-grid,
+.logged-out .panel-heading {
+  display: none;
+}
+
+.logged-out .workspace {
+  min-height: 100vh;
+  place-items: center;
+  padding: 18px;
+}
+
+.logged-out .content-panel {
+  width: min(480px, 100%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.logged-out .section-content {
+  grid-template-columns: 1fr;
+}
+
 .topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -191,6 +221,78 @@ button {
   color: white;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.profile-area {
+  position: relative;
+}
+
+.profile-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  display: grid;
+  min-width: 180px;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  z-index: 40;
+}
+
+.profile-menu[hidden] {
+  display: none;
+}
+
+.profile-menu strong {
+  font-size: 0.9rem;
+}
+
+.login-panel {
+  justify-self: center;
+  align-self: center;
+  display: grid;
+  grid-column: 1 / -1;
+  width: min(420px, 100%);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.login-panel h2 {
+  margin-bottom: 4px;
+}
+
+.login-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.login-panel .primary-action {
+  width: 100%;
+}
+
+.login-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d99cab;
+  border-radius: 8px;
+  color: #9a233d;
+  background: #fff7f9;
+  font-weight: 750;
 }
 
 .eyebrow {
@@ -705,6 +807,25 @@ h3 {
   grid-column: 2 / -1;
 }
 
+.creator-notice {
+  display: flex;
+  grid-column: 2 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #c7dbf2;
+  border-radius: 8px;
+  color: var(--muted);
+  background: #f6faff;
+  font-size: 0.88rem;
+}
+
+.creator-notice span {
+  font-weight: 750;
+}
+
 .year-calendar {
   display: grid;
   grid-column: 1 / -1;
@@ -1162,7 +1283,11 @@ h3 {
   grid-column: 2 / -1;
 }
 
-.group-card .edit-group-button {
+.group-card .creator-notice {
+  grid-column: 2 / -1;
+}
+
+.group-card .group-actions {
   align-self: start;
 }
 
@@ -1358,8 +1483,11 @@ h3 {
   }
 
   .group-card .child-summary,
+  .group-card .creator-notice,
+  .creator-notice,
   .training-card .training-detail-list,
-  .training-card .timeline-preview {
+  .training-card .timeline-preview,
+  .training-card .creator-notice {
     grid-column: auto;
   }
 
@@ -1374,4 +1502,68 @@ h3 {
   .timeline-index {
     align-self: start;
   }
+}
+
+.phone-portrait.logged-in .overview-grid {
+  display: none;
+}
+
+.phone-portrait.logged-in .workspace {
+  gap: 12px;
+  padding: 12px;
+}
+
+.phone-portrait.logged-in .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  margin: -12px -12px 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 248, 255, 0.96);
+}
+
+.phone-portrait.logged-in h1 {
+  font-size: 1.55rem;
+}
+
+.phone-portrait.logged-in .content-panel {
+  gap: 14px;
+  padding: 14px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.phone-portrait.logged-in .panel-heading {
+  grid-template-columns: 1fr;
+}
+
+.phone-portrait.logged-in .section-content,
+.phone-portrait.logged-in .attendance-grid,
+.phone-portrait.logged-in .generated-group-grid,
+.phone-portrait.logged-in .form-grid,
+.phone-portrait.logged-in .child-row-summary,
+.phone-portrait.logged-in .child-detail-grid,
+.phone-portrait.logged-in .relation-panel,
+.phone-portrait.logged-in .timeline-row,
+.phone-portrait.logged-in .training-card,
+.phone-portrait.logged-in .group-card {
+  grid-template-columns: 1fr;
+}
+
+.phone-portrait.logged-in .primary-action,
+.phone-portrait.logged-in .secondary-action,
+.phone-portrait.logged-in .danger-action {
+  width: 100%;
+}
+
+.phone-portrait.logged-in .profile-menu {
+  right: 0;
+}
+
+.phone-portrait.logged-in .group-card .child-summary,
+.phone-portrait.logged-in .group-card .creator-notice,
+.phone-portrait.logged-in .training-card .timeline-preview,
+.phone-portrait.logged-in .training-card .creator-notice {
+  grid-column: auto;
 }

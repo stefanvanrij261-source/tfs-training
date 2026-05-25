@@ -116,9 +116,20 @@ const groupCount = document.querySelector("#groupCount");
 const groupSummary = document.querySelector("#groupSummary");
 const trainingCount = document.querySelector("#trainingCount");
 const trainingSummary = document.querySelector("#trainingSummary");
+const profileButton = document.querySelector("#profileButton");
+const profileInitials = document.querySelector("#profileInitials");
+const profileMenu = document.querySelector("#profileMenu");
+const profileMenuName = document.querySelector("#profileMenuName");
+const logoutButton = document.querySelector("#logoutButton");
 const GROUP_STORAGE_KEY = "clubstart-jeugdgroepen";
 const TRAINING_STORAGE_KEY = "clubstart-trainingen";
 const TRAINING_TEMPLATE_STORAGE_KEY = "clubstart-training-sjablonen";
+const CURRENT_USER_STORAGE_KEY = "clubstart-current-user";
+const IGNORED_CREATOR_STORAGE_KEY = "clubstart-genegeerde-makers";
+const loginUsers = {
+  stefan: "tfsontop",
+  trainer: "trainer",
+};
 const exerciseNames = [
   "Service laag",
   "Service hoog",
@@ -200,8 +211,134 @@ let selectedCalendarMonth = new Date().getMonth();
 let selectedBuilderGroupId = "";
 let pendingTrainingDraft = null;
 let isChoosingTrainingDate = false;
+let currentUser = loadCurrentUser();
+let ignoredCreatorNotices = loadIgnoredCreatorNotices();
+
+function renderLogin(message = "") {
+  updateAppStateClasses();
+  pageTitle.textContent = "Inloggen";
+  sectionKicker.textContent = "Toegang";
+  sectionHeading.textContent = "Log in bij TFS Jeugdtraining";
+  primaryAction.textContent = "Inloggen";
+  sectionContent.innerHTML = `
+    <form class="login-panel" id="loginForm">
+      <img class="login-logo" src="tfs_logo.jpg" alt="TFS" />
+      <div>
+        <h2>Inloggen</h2>
+        <p>Log in om de jeugdtraining te beheren.</p>
+      </div>
+      ${message ? `<p class="login-error">${escapeHtml(message)}</p>` : ""}
+      <label class="field">
+        <span>Gebruikersnaam</span>
+        <input type="text" name="username" autocomplete="username" required />
+      </label>
+      <label class="field">
+        <span>Wachtwoord</span>
+        <input type="password" name="password" autocomplete="current-password" required />
+      </label>
+      <button class="primary-action" type="submit">Inloggen</button>
+    </form>
+  `;
+  document.querySelectorAll(".menu-item").forEach((button) => button.classList.remove("active"));
+  document.querySelector("#loginForm").addEventListener("submit", handleLogin);
+  updateProfileButton();
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const username = String(formData.get("username") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+
+  if (loginUsers[username] !== password) {
+    renderLogin("Gebruikersnaam of wachtwoord klopt niet.");
+    return;
+  }
+
+  currentUser = {
+    username,
+  };
+  saveCurrentUser();
+  updateProfileButton();
+  updateAppStateClasses();
+  activateMenuItem("opties");
+  renderSection("opties");
+}
+
+function logoutCurrentUser() {
+  currentUser = null;
+  saveCurrentUser();
+  pendingTrainingDraft = null;
+  isChoosingTrainingDate = false;
+  updateProfileButton();
+  closeProfileMenu();
+  updateAppStateClasses();
+  renderLogin();
+}
+
+function updateProfileButton() {
+  if (!profileButton || !profileInitials) {
+    return;
+  }
+
+  if (!currentUser) {
+    profileButton.setAttribute("aria-label", "Inloggen");
+    profileButton.setAttribute("aria-expanded", "false");
+    profileInitials.textContent = "?";
+    if (profileMenuName) {
+      profileMenuName.textContent = "Niet ingelogd";
+    }
+    return;
+  }
+
+  profileButton.setAttribute("aria-label", `${currentUser.username} opties`);
+  profileInitials.textContent = currentUser.username.slice(0, 2).toUpperCase();
+  if (profileMenuName) {
+    profileMenuName.textContent = currentUser.username;
+  }
+}
+
+function toggleProfileMenu() {
+  if (!currentUser || !profileMenu) {
+    renderLogin();
+    return;
+  }
+
+  const willOpen = profileMenu.hidden;
+  profileMenu.hidden = !willOpen;
+  profileButton.setAttribute("aria-expanded", String(willOpen));
+}
+
+function closeProfileMenu() {
+  if (!profileMenu || !profileButton) {
+    return;
+  }
+
+  profileMenu.hidden = true;
+  profileButton.setAttribute("aria-expanded", "false");
+}
+
+function updateAppStateClasses() {
+  document.body.classList.toggle("logged-in", Boolean(currentUser));
+  document.body.classList.toggle("logged-out", !currentUser);
+  document.body.classList.toggle("phone-portrait", isPhonePortrait());
+}
+
+function isPhonePortrait() {
+  const isNarrow = window.matchMedia("(max-width: 760px)").matches;
+  const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+  const isTouch = navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+
+  return isNarrow && isPortrait && isTouch;
+}
 
 function renderSection(sectionName) {
+  updateAppStateClasses();
+  if (!currentUser) {
+    renderLogin();
+    return;
+  }
+
   const section = sections[sectionName];
 
   pageTitle.textContent = section.title;
@@ -373,6 +510,7 @@ function trainingCardTemplate(training) {
   const totalMinutes = getTimelineMinutes(timeline);
   const dateLabel = getTrainingDateLabel(training);
   const groupName = getGroupName(training.groupId);
+  const creatorNotice = creatorNoticeTemplate("training", training);
 
   return `
     <article class="item-card training-card">
@@ -399,6 +537,7 @@ function trainingCardTemplate(training) {
       <ol class="timeline-preview">
         ${timeline.map(timelinePreviewItemTemplate).join("")}
       </ol>
+      ${creatorNotice}
     </article>
   `;
 }
@@ -651,6 +790,7 @@ function saveTrainingPlan(event) {
     date: selectedDate,
     groupId: String(formData.get("trainingGroupId") || ""),
     timeline,
+    createdBy: trainingPlans.find((training) => training.id === trainingId)?.createdBy || currentUser?.username || "",
   };
 
   if (trainingId) {
@@ -941,6 +1081,7 @@ function bindTrainingCardButtons() {
   document.querySelectorAll(".delete-training-button").forEach((button) => {
     button.addEventListener("click", () => deleteTrainingPlan(button.dataset.trainingId));
   });
+  bindCreatorNoticeButtons();
 }
 
 function deleteTrainingPlan(trainingId) {
@@ -1127,9 +1268,15 @@ function renderGroups() {
           <ul class="child-summary">
             ${group.children.map((child) => childSummaryTemplate(child, group)).join("")}
           </ul>
-          <button class="secondary-action compact edit-group-button" type="button" data-group-id="${group.id}">
-            Aanpassen
-          </button>
+          <div class="card-actions group-actions">
+            <button class="secondary-action compact edit-group-button" type="button" data-group-id="${group.id}">
+              Aanpassen
+            </button>
+            <button class="danger-action compact delete-group-button" type="button" data-group-id="${group.id}">
+              Verwijder
+            </button>
+          </div>
+          ${creatorNoticeTemplate("group", group)}
         </article>
       `,
     )
@@ -1137,6 +1284,9 @@ function renderGroups() {
 
   document.querySelectorAll(".edit-group-button").forEach((button) => {
     button.addEventListener("click", () => renderGroupForm(button.dataset.groupId));
+  });
+  document.querySelectorAll(".delete-group-button").forEach((button) => {
+    button.addEventListener("click", () => deleteGroup(button.dataset.groupId));
   });
   document.querySelectorAll(".child-summary-button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1147,6 +1297,7 @@ function renderGroups() {
       button.setAttribute("aria-expanded", String(willOpen));
     });
   });
+  bindCreatorNoticeButtons();
 }
 
 function renderGroupForm(groupId = "") {
@@ -1190,6 +1341,29 @@ function renderGroupForm(groupId = "") {
   document.querySelector("#cancelGroupButton").addEventListener("click", () => renderSection("groepen"));
   document.querySelector("#groupForm").addEventListener("submit", saveGroup);
   bindChildRows();
+}
+
+function deleteGroup(groupId) {
+  const group = youthGroups.find((item) => item.id === groupId);
+
+  if (!group) {
+    return;
+  }
+
+  const shouldDelete = window.confirm(`Groep "${group.name}" verwijderen?`);
+
+  if (!shouldDelete) {
+    return;
+  }
+
+  youthGroups = youthGroups.filter((item) => item.id !== groupId);
+  saveGroups();
+
+  if (selectedBuilderGroupId === groupId) {
+    selectedBuilderGroupId = youthGroups[0]?.id || "";
+  }
+
+  renderGroups();
 }
 
 function childRowTemplate(number, child = {}, groupChildren = []) {
@@ -1507,6 +1681,50 @@ function childSummaryTemplate(child, group) {
   `;
 }
 
+function creatorNoticeTemplate(type, item) {
+  if (!shouldShowCreatorNotice(type, item)) {
+    return "";
+  }
+
+  return `
+    <div class="creator-notice">
+      <span>Gemaakt door ${escapeHtml(item.createdBy)}</span>
+      <button class="secondary-action compact ignore-creator-button" type="button" data-notice-key="${escapeHtml(getCreatorNoticeKey(type, item))}">
+        Negeer
+      </button>
+    </div>
+  `;
+}
+
+function shouldShowCreatorNotice(type, item) {
+  if (!currentUser || !item?.createdBy || item.createdBy === "stefan" || item.createdBy === currentUser.username) {
+    return false;
+  }
+
+  return !ignoredCreatorNotices.includes(getCreatorNoticeKey(type, item));
+}
+
+function getCreatorNoticeKey(type, item) {
+  return `${currentUser?.username || "gast"}:${type}:${item.id}:${item.createdBy}`;
+}
+
+function bindCreatorNoticeButtons() {
+  document.querySelectorAll(".ignore-creator-button").forEach((button) => {
+    button.onclick = () => {
+      if (!ignoredCreatorNotices.includes(button.dataset.noticeKey)) {
+        ignoredCreatorNotices = [...ignoredCreatorNotices, button.dataset.noticeKey];
+        saveIgnoredCreatorNotices();
+      }
+
+      const notice = button.closest(".creator-notice");
+
+      if (notice) {
+        notice.remove();
+      }
+    };
+  });
+}
+
 function getRelationNames(relationIds = [], children = []) {
   const ids = new Set(Array.isArray(relationIds) ? relationIds : []);
   return children.filter((child) => ids.has(child.id)).map((child) => child.name);
@@ -1607,6 +1825,7 @@ function saveGroup(event) {
     id: groupId || createId(),
     name: groupName,
     children,
+    createdBy: youthGroups.find((group) => group.id === groupId)?.createdBy || currentUser?.username || "",
   });
 
   if (groupId) {
@@ -2208,6 +2427,28 @@ function loadTrainingTemplates() {
   }
 }
 
+function loadCurrentUser() {
+  try {
+    const savedUser = localStorage.getItem(CURRENT_USER_STORAGE_KEY);
+    const user = savedUser ? JSON.parse(savedUser) : null;
+
+    return user?.username && loginUsers[user.username] ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadIgnoredCreatorNotices() {
+  try {
+    const savedNotices = localStorage.getItem(IGNORED_CREATOR_STORAGE_KEY);
+    const notices = savedNotices ? JSON.parse(savedNotices) : [];
+
+    return Array.isArray(notices) ? notices : [];
+  } catch {
+    return [];
+  }
+}
+
 function saveGroups() {
   try {
     localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(youthGroups));
@@ -2227,6 +2468,26 @@ function saveTrainingPlans() {
 function saveTrainingTemplates() {
   try {
     localStorage.setItem(TRAINING_TEMPLATE_STORAGE_KEY, JSON.stringify(trainingTemplates));
+  } catch {
+    // De app blijft werken, ook als de browser opslag blokkeert.
+  }
+}
+
+function saveCurrentUser() {
+  try {
+    if (currentUser) {
+      localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
+    }
+  } catch {
+    // De app blijft werken, ook als de browser opslag blokkeert.
+  }
+}
+
+function saveIgnoredCreatorNotices() {
+  try {
+    localStorage.setItem(IGNORED_CREATOR_STORAGE_KEY, JSON.stringify(ignoredCreatorNotices));
   } catch {
     // De app blijft werken, ook als de browser opslag blokkeert.
   }
@@ -2304,6 +2565,18 @@ openMenu.addEventListener("click", () => setMenu(true));
 closeMenu.addEventListener("click", () => setMenu(false));
 scrim.addEventListener("click", () => setMenu(false));
 primaryAction.addEventListener("click", () => {
+  if (!currentUser) {
+    const loginForm = document.querySelector("#loginForm");
+
+    if (loginForm) {
+      loginForm.requestSubmit();
+    } else {
+      renderLogin();
+    }
+
+    return;
+  }
+
   const activeSection = document.querySelector(".menu-item.active")?.dataset.section;
 
   if (activeSection === "groepen") {
@@ -2360,6 +2633,24 @@ primaryAction.addEventListener("click", () => {
   }
 });
 
+profileButton.addEventListener("click", () => {
+  toggleProfileMenu();
+});
+logoutButton.addEventListener("click", logoutCurrentUser);
+document.addEventListener("click", (event) => {
+  if (!profileMenu || profileMenu.hidden) {
+    return;
+  }
+
+  if (!event.target.closest(".profile-area")) {
+    closeProfileMenu();
+  }
+});
+window.addEventListener("resize", updateAppStateClasses);
+window.addEventListener("orientationchange", updateAppStateClasses);
+
+updateProfileButton();
+updateAppStateClasses();
 updateGroupSummary();
 updateTrainingSummary();
-renderSection("opties");
+renderSection(currentUser ? "opties" : "login");

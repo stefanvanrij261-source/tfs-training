@@ -115,9 +115,15 @@
             <p class="eyebrow">Welkom terug</p>
             <h1 id="pageTitle">Opties</h1>
           </div>
-          <button class="profile-button" type="button" aria-label="Profiel">
-            <span>LV</span>
-          </button>
+          <div class="profile-area">
+            <button class="profile-button" type="button" id="profileButton" aria-label="Inloggen" aria-expanded="false">
+              <span id="profileInitials">?</span>
+            </button>
+            <div class="profile-menu" id="profileMenu" hidden>
+              <strong id="profileMenuName">Niet ingelogd</strong>
+              <button class="secondary-action compact" type="button" id="logoutButton">Uitloggen</button>
+            </div>
+          </div>
         </header>
 
         <section class="overview-grid" aria-label="Overzicht">
