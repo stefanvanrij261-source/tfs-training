@@ -125,6 +125,7 @@ const logoutButton = document.querySelector("#logoutButton");
 const GROUP_STORAGE_KEY = "clubstart-jeugdgroepen";
 const TRAINING_STORAGE_KEY = "clubstart-trainingen";
 const TRAINING_TEMPLATE_STORAGE_KEY = "clubstart-training-sjablonen";
+const TRAINING_TYPE_STORAGE_KEY = "clubstart-training-soorten";
 const CURRENT_USER_STORAGE_KEY = "clubstart-current-user";
 const IGNORED_CREATOR_STORAGE_KEY = "clubstart-genegeerde-makers";
 const SYNC_ENDPOINT = "/api/state";
@@ -210,6 +211,7 @@ const weekDayLabels = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 let youthGroups = loadGroups();
 let trainingPlans = loadTrainingPlans();
 let trainingTemplates = loadTrainingTemplates();
+let customTrainingTypes = loadTrainingTypes();
 let selectedCalendarYear = new Date().getFullYear();
 let selectedCalendarMonth = new Date().getMonth();
 let selectedBuilderGroupId = "";
@@ -615,6 +617,25 @@ function renderTrainingForm(trainingId = "") {
         }
       </div>
 
+      <section class="custom-exercise-panel">
+        <div class="custom-exercise-row">
+          <label class="field">
+            <span>Eigen oefening toevoegen</span>
+            <input type="text" id="trainingTypeNameInput" placeholder="Bijvoorbeeld Smash opbouw" />
+          </label>
+          <button class="secondary-action" type="button" id="addTrainingTypeButton">
+            Toevoegen
+          </button>
+        </div>
+        <div class="training-type-list">
+          ${
+            customTrainingTypes.length
+              ? customTrainingTypes.map(trainingTypeCardTemplate).join("")
+              : `<p class="muted-text">Nog geen eigen soorten toegevoegd.</p>`
+          }
+        </div>
+      </section>
+
       <div class="training-row-header">
         <h3>Tijdlijn</h3>
         <button class="secondary-action compact" type="button" id="addTimelineBlockButton">Blok toevoegen</button>
@@ -641,9 +662,14 @@ function renderTrainingForm(trainingId = "") {
   document.querySelector("#templateMenuButton").addEventListener("click", toggleTemplateMenu);
   document.querySelector("#saveTrainingTemplateButton").addEventListener("click", saveCurrentTrainingTemplate);
   document.querySelector("#loadTrainingTemplateButton").addEventListener("click", toggleTemplateLoader);
+  document.querySelector("#addTrainingTypeButton").addEventListener("click", addTrainingTypeFromForm);
   document.querySelectorAll(".load-template-button").forEach((button) => {
     button.addEventListener("click", () => loadTrainingTemplate(button.dataset.templateId));
   });
+  document.querySelectorAll(".delete-training-type-button").forEach((button) => {
+    button.addEventListener("click", () => deleteTrainingType(button.dataset.trainingTypeId));
+  });
+  bindCreatorNoticeButtons();
   bindTimelineRows();
   updateTimelineTotal();
 }
@@ -654,6 +680,18 @@ function trainingTemplateButtonTemplate(template) {
       <strong>${escapeHtml(template.templateName)}</strong>
       <span>${getTimelineMinutes(getTrainingTimeline(template))} minuten</span>
     </button>
+  `;
+}
+
+function trainingTypeCardTemplate(trainingType) {
+  return `
+    <article class="training-type-card">
+      <span>${escapeHtml(trainingType.name)}</span>
+      <button class="danger-action compact delete-training-type-button" type="button" data-training-type-id="${escapeHtml(trainingType.id)}">
+        Verwijder
+      </button>
+      ${creatorNoticeTemplate("trainingType", trainingType)}
+    </article>
   `;
 }
 
@@ -682,7 +720,7 @@ function timelineRowTemplate(number, block = {}) {
       <label class="field training-only">
         <span>Oefening</span>
         <select name="timelineExercise">
-          ${exerciseNames.map((item) => `<option value="${item}" ${exercise === item ? "selected" : ""}>${item}</option>`).join("")}
+          ${getTrainingExerciseOptions(exercise).map((item) => `<option value="${escapeHtml(item)}" ${exercise === item ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}
         </select>
       </label>
       <label class="field pause-party-only">
@@ -903,11 +941,62 @@ function saveCurrentTrainingTemplate() {
     id: createId(),
     templateName: templateName.trim(),
     date: "",
+    createdBy: currentUser?.username || "",
   };
 
   trainingTemplates = [template, ...trainingTemplates];
   saveTrainingTemplates();
   renderTrainingForm(draft.id || "");
+}
+
+function addTrainingTypeFromForm() {
+  const trainingForm = document.querySelector("#trainingForm");
+  const input = document.querySelector("#trainingTypeNameInput");
+  const name = input?.value.trim();
+
+  if (!trainingForm || !name) {
+    input?.focus();
+    return;
+  }
+
+  const exists = getTrainingExerciseOptions().some((item) => item.toLowerCase() === name.toLowerCase());
+
+  if (exists) {
+    input.value = "";
+    return;
+  }
+
+  pendingTrainingDraft = collectTrainingDraft(trainingForm);
+  customTrainingTypes = [
+    {
+      id: createId(),
+      name,
+      createdBy: currentUser?.username || "",
+    },
+    ...customTrainingTypes,
+  ];
+  saveTrainingTypes();
+  renderTrainingForm(pendingTrainingDraft.id || "");
+}
+
+function deleteTrainingType(trainingTypeId) {
+  const trainingForm = document.querySelector("#trainingForm");
+  const trainingType = customTrainingTypes.find((item) => item.id === trainingTypeId);
+
+  if (!trainingForm || !trainingType) {
+    return;
+  }
+
+  const shouldDelete = window.confirm(`Oefening "${trainingType.name}" verwijderen?`);
+
+  if (!shouldDelete) {
+    return;
+  }
+
+  pendingTrainingDraft = collectTrainingDraft(trainingForm);
+  customTrainingTypes = customTrainingTypes.filter((item) => item.id !== trainingTypeId);
+  saveTrainingTypes();
+  renderTrainingForm(pendingTrainingDraft.id || "");
 }
 
 function loadTrainingTemplate(templateId) {
@@ -1156,6 +1245,26 @@ function getTrainingTimeline(training) {
   return timeline;
 }
 
+function getTrainingExerciseOptions(selectedExercise = "") {
+  const names = [
+    ...exerciseNames,
+    ...customTrainingTypes.map((item) => item.name),
+    selectedExercise,
+  ].filter(Boolean);
+  const seen = new Set();
+
+  return names.filter((name) => {
+    const key = name.toLowerCase();
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
 function getTimelineMinutes(timeline) {
   return timeline.reduce((sum, block) => sum + Number(block.minutes || 0), 0);
 }
@@ -1272,21 +1381,23 @@ function renderGroups() {
           <span class="item-icon green" aria-hidden="true">
             <svg viewBox="0 0 24 24">${icons.users}</svg>
           </span>
-          <div>
-            <h3>${escapeHtml(group.name)}</h3>
-            <p>${group.children.length} ${group.children.length === 1 ? "kind" : "kinderen"} toegevoegd.</p>
+          <div class="group-card-main">
+            <div>
+              <h3>${escapeHtml(group.name)}</h3>
+              <p>${group.children.length} ${group.children.length === 1 ? "kind" : "kinderen"} toegevoegd.</p>
+            </div>
+            <div class="card-actions group-actions">
+              <button class="secondary-action compact edit-group-button" type="button" data-group-id="${group.id}">
+                Aanpassen
+              </button>
+              <button class="danger-action compact delete-group-button" type="button" data-group-id="${group.id}">
+                Verwijder
+              </button>
+            </div>
           </div>
           <ul class="child-summary">
             ${group.children.map((child) => childSummaryTemplate(child, group)).join("")}
           </ul>
-          <div class="card-actions group-actions">
-            <button class="secondary-action compact edit-group-button" type="button" data-group-id="${group.id}">
-              Aanpassen
-            </button>
-            <button class="danger-action compact delete-group-button" type="button" data-group-id="${group.id}">
-              Verwijder
-            </button>
-          </div>
           ${creatorNoticeTemplate("group", group)}
         </article>
       `,
@@ -2535,6 +2646,7 @@ function getSerializableState() {
     youthGroups,
     trainingPlans,
     trainingTemplates,
+    trainingTypes: customTrainingTypes,
     updatedAt: Date.now(),
   };
 }
@@ -2559,6 +2671,7 @@ function applySharedState(state, { force = false } = {}) {
     : [];
   trainingPlans = Array.isArray(state.trainingPlans) ? state.trainingPlans : [];
   trainingTemplates = Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [];
+  customTrainingTypes = Array.isArray(state.trainingTypes) ? state.trainingTypes : [];
   selectedBuilderPresentIds = null;
   currentBuilderResult = null;
   sharedStateVersion = incomingVersion || Date.now();
@@ -2566,6 +2679,7 @@ function applySharedState(state, { force = false } = {}) {
   saveGroups(false);
   saveTrainingPlans(false);
   saveTrainingTemplates(false);
+  saveTrainingTypes(false);
   rerenderCurrentSection();
 }
 
@@ -2640,16 +2754,18 @@ async function pollSharedState({ force = false } = {}) {
 }
 
 function isSharedStateEmpty(state) {
+  const trainingTypes = Array.isArray(state?.trainingTypes) ? state.trainingTypes : [];
+
   return (
     !Array.isArray(state?.youthGroups) ||
     !Array.isArray(state?.trainingPlans) ||
     !Array.isArray(state?.trainingTemplates) ||
-    (!state.youthGroups.length && !state.trainingPlans.length && !state.trainingTemplates.length)
+    (!state.youthGroups.length && !state.trainingPlans.length && !state.trainingTemplates.length && !trainingTypes.length)
   );
 }
 
 function hasLocalSharedData() {
-  return youthGroups.length > 0 || trainingPlans.length > 0 || trainingTemplates.length > 0;
+  return youthGroups.length > 0 || trainingPlans.length > 0 || trainingTemplates.length > 0 || customTrainingTypes.length > 0;
 }
 
 function saveSharedState() {
@@ -2739,6 +2855,17 @@ function loadTrainingTemplates() {
   }
 }
 
+function loadTrainingTypes() {
+  try {
+    const savedTrainingTypes = localStorage.getItem(TRAINING_TYPE_STORAGE_KEY);
+    const trainingTypes = savedTrainingTypes ? JSON.parse(savedTrainingTypes) : [];
+
+    return Array.isArray(trainingTypes) ? trainingTypes : [];
+  } catch {
+    return [];
+  }
+}
+
 function loadCurrentUser() {
   try {
     const savedUser = localStorage.getItem(CURRENT_USER_STORAGE_KEY);
@@ -2788,6 +2915,18 @@ function saveTrainingPlans(sync = true) {
 function saveTrainingTemplates(sync = true) {
   try {
     localStorage.setItem(TRAINING_TEMPLATE_STORAGE_KEY, JSON.stringify(trainingTemplates));
+  } catch {
+    // De app blijft werken, ook als de browser opslag blokkeert.
+  }
+
+  if (sync) {
+    saveSharedState();
+  }
+}
+
+function saveTrainingTypes(sync = true) {
+  try {
+    localStorage.setItem(TRAINING_TYPE_STORAGE_KEY, JSON.stringify(customTrainingTypes));
   } catch {
     // De app blijft werken, ook als de browser opslag blokkeert.
   }

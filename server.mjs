@@ -21,6 +21,7 @@ const emptyState = {
   youthGroups: [],
   trainingPlans: [],
   trainingTemplates: [],
+  trainingTypes: [],
   updatedAt: 0,
 };
 
@@ -29,6 +30,7 @@ function cleanState(state = {}, fallbackUpdatedAt = Date.now()) {
     youthGroups: Array.isArray(state.youthGroups) ? state.youthGroups : [],
     trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [],
     trainingTemplates: Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [],
+    trainingTypes: Array.isArray(state.trainingTypes) ? state.trainingTypes : [],
     updatedAt: Number(state.updatedAt || fallbackUpdatedAt || Date.now()),
   };
 }

@@ -10,6 +10,8 @@
   --blue: #0c5fa8;
   --amber: #3b82c4;
   --rose: #245b94;
+  --court: #1e8b6a;
+  --coral: #ef6c57;
   --shadow: 0 18px 48px rgba(20, 55, 96, 0.13);
 }
 
@@ -21,7 +23,9 @@ body {
   min-width: 320px;
   margin: 0;
   color: var(--ink);
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(30, 139, 106, 0.14), transparent 28%),
+    linear-gradient(135deg, #f4f8ff 0%, #eef8f4 48%, #fff8f3 100%);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -39,14 +43,26 @@ button {
 .sidebar {
   position: sticky;
   top: 0;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 28px;
   height: 100vh;
   padding: 22px 18px;
   border-right: 1px solid var(--line);
-  background: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 253, 255, 0.96)),
+    repeating-linear-gradient(135deg, rgba(12, 95, 168, 0.04) 0 1px, transparent 1px 16px);
+  box-shadow: 12px 0 34px rgba(20, 55, 96, 0.06);
   z-index: 30;
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, var(--court), var(--blue), var(--coral));
 }
 
 .brand-row {
@@ -116,6 +132,8 @@ button {
 }
 
 .menu-item {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 24px 1fr;
   align-items: center;
@@ -129,20 +147,38 @@ button {
   background: transparent;
   cursor: pointer;
   text-align: left;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .menu-item:hover,
 .menu-item:focus-visible {
   border-color: var(--line);
-  background: var(--surface-soft);
+  background: linear-gradient(90deg, rgba(12, 95, 168, 0.12), rgba(30, 139, 106, 0.08));
   outline: none;
+  transform: translateX(3px);
 }
 
 .menu-item.active {
   border-color: #a9cdf2;
-  background: #e7f2ff;
+  background: linear-gradient(90deg, #e7f2ff 0%, #ecf9f3 100%);
   color: var(--blue);
   font-weight: 700;
+  box-shadow: inset 4px 0 0 var(--court);
+}
+
+.menu-item.active::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: 0 0 0 5px rgba(239, 108, 87, 0.12);
 }
 
 .workspace {
@@ -193,6 +229,28 @@ button {
   display: none;
 }
 
+.shuttle-button {
+  color: var(--blue);
+  background: #f7fbff;
+}
+
+.shuttle-icon {
+  display: block;
+  width: 26px;
+  height: 36px;
+  background: url("tfs-shuttle.png") center / contain no-repeat;
+  transition: transform 220ms ease;
+  transform-origin: center;
+}
+
+.shuttle-left {
+  transform: rotate(-45deg);
+}
+
+.shuttle-right {
+  transform: rotate(135deg);
+}
+
 .icon-button,
 .profile-button {
   display: inline-grid;
@@ -204,11 +262,19 @@ button {
   color: var(--ink);
   background: var(--surface);
   cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
 }
 
 .icon-button:hover,
 .profile-button:hover {
-  border-color: #b8c8bd;
+  border-color: #8bb7d8;
+  background: #f7fbff;
+  box-shadow: 0 8px 20px rgba(20, 55, 96, 0.1);
+  transform: translateY(-1px);
 }
 
 .profile-button span {
@@ -610,6 +676,22 @@ h3 {
   z-index: 10;
 }
 
+.custom-exercise-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.custom-exercise-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
 .template-loader {
   display: grid;
   gap: 10px;
@@ -617,6 +699,12 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f8fbff;
+}
+
+.training-type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .template-loader[hidden],
@@ -645,6 +733,35 @@ h3 {
 .template-load-card span {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.training-type-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.training-type-card > span {
+  font-weight: 800;
+}
+
+.training-type-card .delete-training-type-button {
+  width: auto;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.training-type-card .creator-notice {
+  grid-column: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .children-header h3,
@@ -1283,6 +1400,24 @@ h3 {
   align-items: start;
 }
 
+.group-card-main {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.group-card-main h3 {
+  margin-bottom: 4px;
+}
+
+.group-card-main p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .group-card .child-summary {
   grid-column: 2 / -1;
 }
@@ -1293,6 +1428,7 @@ h3 {
 
 .group-card .group-actions {
   align-self: start;
+  flex: 0 0 auto;
 }
 
 .level-grid,
@@ -1394,7 +1530,18 @@ h3 {
   position: fixed;
   inset: 0;
   background: rgba(16, 24, 18, 0.42);
+  backdrop-filter: blur(3px);
   z-index: 20;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-item,
+  .icon-button,
+  .profile-button,
+  .sidebar {
+    animation: none;
+    transition: none;
+  }
 }
 
 @media (max-width: 920px) {
@@ -1408,11 +1555,31 @@ h3 {
     width: min(320px, 86vw);
     transform: translateX(-104%);
     box-shadow: var(--shadow);
-    transition: transform 180ms ease;
+    transition: transform 360ms cubic-bezier(0.22, 0.95, 0.24, 1);
   }
 
   .sidebar.open {
     transform: translateX(0);
+  }
+
+  .sidebar .close-menu {
+    position: absolute;
+    right: -23px;
+    top: 22px;
+    display: inline-grid;
+    opacity: 0;
+    pointer-events: none;
+    transform: rotate(180deg) scale(0.88);
+    transform-origin: center;
+    transition:
+      opacity 140ms ease,
+      transform 360ms cubic-bezier(0.22, 0.95, 0.24, 1);
+  }
+
+  .sidebar.open .close-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: rotate(0deg) scale(1);
   }
 
   .close-menu,
@@ -1459,7 +1626,9 @@ h3 {
   .form-actions,
   .submit-actions,
   .card-actions,
-  .training-tools,
+  .custom-exercise-row,
+  .template-loader,
+  .training-type-list,
   .child-row,
   .child-row-summary,
   .child-detail-grid,
@@ -1488,6 +1657,7 @@ h3 {
 
   .group-card .child-summary,
   .group-card .creator-notice,
+  .group-card-main,
   .creator-notice,
   .training-card .training-detail-list,
   .training-card .timeline-preview,
@@ -1546,6 +1716,9 @@ h3 {
 .phone-portrait.logged-in .attendance-grid,
 .phone-portrait.logged-in .generated-group-grid,
 .phone-portrait.logged-in .form-grid,
+.phone-portrait.logged-in .custom-exercise-row,
+.phone-portrait.logged-in .template-loader,
+.phone-portrait.logged-in .training-type-list,
 .phone-portrait.logged-in .child-row-summary,
 .phone-portrait.logged-in .child-detail-grid,
 .phone-portrait.logged-in .relation-panel,
@@ -1567,6 +1740,7 @@ h3 {
 
 .phone-portrait.logged-in .group-card .child-summary,
 .phone-portrait.logged-in .group-card .creator-notice,
+.phone-portrait.logged-in .group-card-main,
 .phone-portrait.logged-in .training-card .timeline-preview,
 .phone-portrait.logged-in .training-card .creator-notice {
   grid-column: auto;
