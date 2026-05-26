@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
+import { statSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { networkInterfaces } from "node:os";
@@ -20,7 +21,17 @@ const emptyState = {
   youthGroups: [],
   trainingPlans: [],
   trainingTemplates: [],
+  updatedAt: 0,
 };
+
+function cleanState(state = {}, fallbackUpdatedAt = Date.now()) {
+  return {
+    youthGroups: Array.isArray(state.youthGroups) ? state.youthGroups : [],
+    trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [],
+    trainingTemplates: Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [],
+    updatedAt: Number(state.updatedAt || fallbackUpdatedAt || Date.now()),
+  };
+}
 
 async function readState() {
   if (!existsSync(dataPath)) {
@@ -29,7 +40,7 @@ async function readState() {
   }
 
   try {
-    return JSON.parse(await readFile(dataPath, "utf8"));
+    return cleanState(JSON.parse(await readFile(dataPath, "utf8")), statSync(dataPath).mtimeMs);
   } catch {
     return emptyState;
   }
@@ -44,11 +55,7 @@ async function writeState(request, response) {
   request.on("end", async () => {
     try {
       const state = JSON.parse(body || "{}");
-      const nextState = {
-        youthGroups: Array.isArray(state.youthGroups) ? state.youthGroups : [],
-        trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [],
-        trainingTemplates: Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [],
-      };
+      const nextState = cleanState(state);
 
       await writeFile(dataPath, JSON.stringify(nextState, null, 2));
       response.writeHead(200, { "Content-Type": "application/json" });

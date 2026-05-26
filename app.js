@@ -213,6 +213,9 @@ let trainingTemplates = loadTrainingTemplates();
 let selectedCalendarYear = new Date().getFullYear();
 let selectedCalendarMonth = new Date().getMonth();
 let selectedBuilderGroupId = "";
+let selectedBuilderGroupSize = 4;
+let selectedBuilderPresentIds = null;
+let currentBuilderResult = null;
 let pendingTrainingDraft = null;
 let isChoosingTrainingDate = false;
 let currentUser = loadCurrentUser();
@@ -1369,8 +1372,10 @@ function deleteGroup(groupId) {
 
   if (selectedBuilderGroupId === groupId) {
     selectedBuilderGroupId = youthGroups[0]?.id || "";
+    selectedBuilderPresentIds = null;
   }
 
+  currentBuilderResult = null;
   renderGroups();
 }
 
@@ -1392,6 +1397,7 @@ function childRowTemplate(number, child = {}, groupChildren = []) {
         <button class="secondary-action compact child-toggle-button" type="button" aria-expanded="${isOpen}" aria-controls="${escapeHtml(detailsId)}">
           ${isOpen ? "Inklappen" : "Uitklappen"}
         </button>
+        <button class="danger-action compact remove-child-button" type="button">Verwijder kind</button>
       </div>
       <div class="child-row-details" id="${escapeHtml(detailsId)}" ${isOpen ? "" : "hidden"}>
       <div class="child-detail-grid">
@@ -1429,6 +1435,24 @@ function addChildRow() {
   const nextNumber = childrenList.querySelectorAll(".child-row").length + 1;
   childrenList.insertAdjacentHTML("beforeend", childRowTemplate(nextNumber));
   bindChildRows();
+}
+
+function removeChildRow(row) {
+  row.remove();
+  renumberChildRows();
+  refreshChildRelationOptions();
+}
+
+function renumberChildRows() {
+  document.querySelectorAll(".child-row").forEach((row, index) => {
+    const number = index + 1;
+    const label = row.querySelector(".child-name-field span");
+
+    row.dataset.childNumber = String(number);
+    if (label) {
+      label.textContent = `Naam kind ${number}`;
+    }
+  });
 }
 
 function relationBlockTemplate(type, title, buttonLabel, childId, groupChildren = [], selectedIds = []) {
@@ -1504,6 +1528,15 @@ function bindChildRows() {
       const row = select.closest(".child-row");
       updateChildRowLevelBadge(row, select.value);
       row.querySelector(".child-skills").innerHTML = childSkillChecklistTemplate(select.value, []);
+    };
+  });
+  document.querySelectorAll(".remove-child-button").forEach((button) => {
+    button.onclick = () => {
+      const row = button.closest(".child-row");
+
+      if (row) {
+        removeChildRow(row);
+      }
     };
   });
   document.querySelectorAll(".add-relation-button").forEach((button) => {
@@ -1621,6 +1654,8 @@ function relationChipTemplate(childId, children) {
 }
 
 function addRelationValue(row, type, childId) {
+  const sourceId = getRowChildId(row);
+  const targetRow = getChildRowById(childId);
   const values = new Set(getRelationValues(row, type));
   const otherType = type === "friends" ? "noGos" : "friends";
   const otherValues = new Set(getRelationValues(row, otherType));
@@ -1629,13 +1664,44 @@ function addRelationValue(row, type, childId) {
   values.add(childId);
   setRelationValues(row, otherType, otherValues);
   setRelationValues(row, type, values);
+
+  if (!targetRow || !sourceId) {
+    return;
+  }
+
+  const targetValues = new Set(getRelationValues(targetRow, type));
+  const targetOtherValues = new Set(getRelationValues(targetRow, otherType));
+
+  targetOtherValues.delete(sourceId);
+  targetValues.add(sourceId);
+  setRelationValues(targetRow, otherType, targetOtherValues);
+  setRelationValues(targetRow, type, targetValues);
 }
 
 function removeRelationValue(row, type, childId) {
+  const sourceId = getRowChildId(row);
+  const targetRow = getChildRowById(childId);
   const values = new Set(getRelationValues(row, type));
 
   values.delete(childId);
   setRelationValues(row, type, values);
+
+  if (!targetRow || !sourceId) {
+    return;
+  }
+
+  const targetValues = new Set(getRelationValues(targetRow, type));
+
+  targetValues.delete(sourceId);
+  setRelationValues(targetRow, type, targetValues);
+}
+
+function getRowChildId(row) {
+  return row?.querySelector('input[name="childId"]')?.value || "";
+}
+
+function getChildRowById(childId) {
+  return Array.from(document.querySelectorAll(".child-row")).find((row) => getRowChildId(row) === childId) || null;
 }
 
 function getRelationValues(row, type) {
@@ -1843,6 +1909,8 @@ function saveGroup(event) {
   }
 
   saveGroups();
+  selectedBuilderPresentIds = null;
+  currentBuilderResult = null;
   renderGroups();
 }
 
@@ -1894,7 +1962,7 @@ function normalizeGroupRelationships(group) {
   };
 }
 
-function renderGroupBuilder(result = null) {
+function renderGroupBuilder(result = currentBuilderResult) {
   updateGroupSummary();
   primaryAction.textContent = "Groepen maken";
 
@@ -1915,8 +1983,21 @@ function renderGroupBuilder(result = null) {
   }
 
   selectedBuilderGroupId = selectedBuilderGroupId || youthGroups[0].id;
+  const requestedBuilderGroupId = selectedBuilderGroupId;
   const selectedGroup = youthGroups.find((group) => group.id === selectedBuilderGroupId) || youthGroups[0];
   selectedBuilderGroupId = selectedGroup.id;
+  if (selectedBuilderGroupId !== requestedBuilderGroupId) {
+    selectedBuilderPresentIds = null;
+    currentBuilderResult = null;
+  }
+  const maxGroupSize = Math.max(selectedGroup.children.length, 1);
+  const groupSize = Math.min(Math.max(1, Number(selectedBuilderGroupSize) || 4), maxGroupSize);
+  selectedBuilderGroupSize = groupSize;
+  const presentIds =
+    selectedBuilderPresentIds instanceof Set
+      ? selectedBuilderPresentIds
+      : new Set(selectedGroup.children.map((child) => child.id));
+  selectedBuilderPresentIds = presentIds;
   sectionHeading.textContent = "Automatische groepen maken";
 
   sectionContent.innerHTML = `
@@ -1935,7 +2016,7 @@ function renderGroupBuilder(result = null) {
         </label>
         <label class="field">
           <span>Grootte per groep</span>
-          <input type="number" name="groupSize" min="1" max="${Math.max(selectedGroup.children.length, 1)}" value="${Math.min(4, Math.max(selectedGroup.children.length, 1))}" required />
+          <input type="number" name="groupSize" min="1" max="${maxGroupSize}" value="${groupSize}" required />
         </label>
       </div>
 
@@ -1945,7 +2026,7 @@ function renderGroupBuilder(result = null) {
           <button class="secondary-action compact" type="button" id="selectAllPresentButton">Iedereen aanwezig</button>
         </div>
         <div class="attendance-grid">
-          ${selectedGroup.children.map(attendanceOptionTemplate).join("")}
+          ${selectedGroup.children.map((child) => attendanceOptionTemplate(child, presentIds)).join("")}
         </div>
       </div>
 
@@ -1958,23 +2039,37 @@ function renderGroupBuilder(result = null) {
 
   document.querySelector("#sourceGroupSelect").addEventListener("change", (event) => {
     selectedBuilderGroupId = event.target.value;
+    selectedBuilderPresentIds = null;
+    currentBuilderResult = null;
     renderGroupBuilder();
+  });
+  document.querySelector('input[name="groupSize"]').addEventListener("input", (event) => {
+    selectedBuilderGroupSize = Math.min(Math.max(1, Number(event.target.value) || 1), maxGroupSize);
+    currentBuilderResult = null;
   });
   document.querySelector("#selectAllPresentButton").addEventListener("click", () => {
     document.querySelectorAll('input[name="presentChild"]').forEach((checkbox) => {
       checkbox.checked = true;
     });
+    updateBuilderPresenceFromForm();
+    currentBuilderResult = null;
+  });
+  document.querySelectorAll('input[name="presentChild"]').forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      updateBuilderPresenceFromForm();
+      currentBuilderResult = null;
+    });
   });
   document.querySelector("#groupBuilderForm").addEventListener("submit", handleGroupBuilderSubmit);
 }
 
-function attendanceOptionTemplate(child) {
+function attendanceOptionTemplate(child, presentIds) {
   const level = getChildLevel(child);
   const definition = levelDefinitions[level];
 
   return `
     <label class="attendance-option">
-      <input type="checkbox" name="presentChild" value="${escapeHtml(child.id)}" checked />
+      <input type="checkbox" name="presentChild" value="${escapeHtml(child.id)}" ${presentIds.has(child.id) ? "checked" : ""} />
       <span>
         <strong>${escapeHtml(child.name)}</strong>
         <small>${escapeHtml(child.age)} jaar</small>
@@ -1984,23 +2079,40 @@ function attendanceOptionTemplate(child) {
   `;
 }
 
+function updateBuilderPresenceFromForm() {
+  const form = document.querySelector("#groupBuilderForm");
+
+  if (!form) {
+    return;
+  }
+
+  selectedBuilderPresentIds = new Set(
+    Array.from(form.querySelectorAll('input[name="presentChild"]:checked')).map((checkbox) => checkbox.value),
+  );
+}
+
 function handleGroupBuilderSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const sourceGroupId = form.querySelector('select[name="sourceGroupId"]').value;
-  const groupSize = Math.max(1, Number(form.querySelector('input[name="groupSize"]').value || 1));
-  const presentIds = new Set(
-    Array.from(form.querySelectorAll('input[name="presentChild"]:checked')).map((checkbox) => checkbox.value),
-  );
   const sourceGroup = youthGroups.find((group) => group.id === sourceGroupId);
 
   if (!sourceGroup) {
     return;
   }
 
+  const maxGroupSize = Math.max(sourceGroup.children.length, 1);
+  const groupSize = Math.min(Math.max(1, Number(form.querySelector('input[name="groupSize"]').value || 1)), maxGroupSize);
+  const presentIds = new Set(
+    Array.from(form.querySelectorAll('input[name="presentChild"]:checked')).map((checkbox) => checkbox.value),
+  );
+  selectedBuilderGroupId = sourceGroupId;
+  selectedBuilderGroupSize = groupSize;
+  selectedBuilderPresentIds = presentIds;
+
   const presentChildren = sourceGroup.children.filter((child) => presentIds.has(child.id));
-  const result = createBalancedGroups(presentChildren, groupSize);
-  renderGroupBuilder(result);
+  currentBuilderResult = createBalancedGroups(presentChildren, groupSize);
+  renderGroupBuilder(currentBuilderResult);
 }
 
 function createBalancedGroups(children, targetSize) {
@@ -2434,6 +2546,10 @@ function applySharedState(state, { force = false } = {}) {
 
   const incomingVersion = Number(state.updatedAt || 0);
 
+  if (!incomingVersion && (!force || (sharedStateVersion && hasLocalSharedData()))) {
+    return;
+  }
+
   if (!force && incomingVersion && incomingVersion <= sharedStateVersion) {
     return;
   }
@@ -2443,6 +2559,8 @@ function applySharedState(state, { force = false } = {}) {
     : [];
   trainingPlans = Array.isArray(state.trainingPlans) ? state.trainingPlans : [];
   trainingTemplates = Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [];
+  selectedBuilderPresentIds = null;
+  currentBuilderResult = null;
   sharedStateVersion = incomingVersion || Date.now();
   localStorage.setItem(SHARED_STATE_VERSION_STORAGE_KEY, String(sharedStateVersion));
   saveGroups(false);
@@ -2475,9 +2593,12 @@ async function loadSharedState() {
     }
 
     const state = await response.json();
+    const incomingVersion = Number(state.updatedAt || 0);
     syncMode = "shared";
     remoteSyncReady = true;
     if (isSharedStateEmpty(state) && hasLocalSharedData()) {
+      saveSharedState();
+    } else if (hasLocalSharedData() && sharedStateVersion && (!incomingVersion || incomingVersion < sharedStateVersion)) {
       saveSharedState();
     } else {
       applySharedState(state, { force: true });
@@ -2746,6 +2867,26 @@ function setMenu(open) {
   openMenu.setAttribute("aria-expanded", String(open));
 }
 
+function submitForm(form) {
+  if (!form) {
+    return;
+  }
+
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+
+  if (submitButton) {
+    submitButton.click();
+    return;
+  }
+
+  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+}
+
 function activateMenuItem(sectionName) {
   menuItems.forEach((button) => {
     button.classList.toggle("active", button.dataset.section === sectionName);
@@ -2772,7 +2913,7 @@ primaryAction.addEventListener("click", () => {
     const loginForm = document.querySelector("#loginForm");
 
     if (loginForm) {
-      loginForm.requestSubmit();
+      submitForm(loginForm);
     } else {
       renderLogin();
     }
@@ -2786,7 +2927,7 @@ primaryAction.addEventListener("click", () => {
     const groupForm = document.querySelector("#groupForm");
 
     if (groupForm) {
-      groupForm.requestSubmit();
+      submitForm(groupForm);
       return;
     }
 
@@ -2807,7 +2948,7 @@ primaryAction.addEventListener("click", () => {
     const builderForm = document.querySelector("#groupBuilderForm");
 
     if (builderForm) {
-      builderForm.requestSubmit();
+      submitForm(builderForm);
     }
   }
 
@@ -2815,7 +2956,7 @@ primaryAction.addEventListener("click", () => {
     const trainingForm = document.querySelector("#trainingForm");
 
     if (trainingForm) {
-      trainingForm.requestSubmit();
+      submitForm(trainingForm);
       return;
     }
 
@@ -2827,7 +2968,7 @@ primaryAction.addEventListener("click", () => {
     const trainingForm = document.querySelector("#trainingForm");
 
     if (trainingForm) {
-      trainingForm.requestSubmit();
+      submitForm(trainingForm);
       return;
     }
 

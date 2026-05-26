@@ -8,12 +8,12 @@ const emptyState = {
   updatedAt: 0,
 };
 
-function cleanState(state = {}) {
+function cleanState(state = {}, fallbackUpdatedAt = 0) {
   return {
     youthGroups: Array.isArray(state.youthGroups) ? state.youthGroups : [],
     trainingPlans: Array.isArray(state.trainingPlans) ? state.trainingPlans : [],
     trainingTemplates: Array.isArray(state.trainingTemplates) ? state.trainingTemplates : [],
-    updatedAt: Number(state.updatedAt || Date.now()),
+    updatedAt: Number(state.updatedAt || fallbackUpdatedAt),
   };
 }
 
@@ -53,7 +53,7 @@ async function readState() {
 }
 
 async function writeState(state) {
-  await put(STATE_PATH, JSON.stringify(cleanState(state), null, 2), {
+  await put(STATE_PATH, JSON.stringify(cleanState(state, Date.now()), null, 2), {
     access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,

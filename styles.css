@@ -989,7 +989,7 @@ h3 {
 
 .child-row-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: end;
   gap: 12px;
 }
@@ -998,6 +998,10 @@ h3 {
   align-self: end;
   min-height: 42px;
   border-radius: 8px;
+}
+
+.remove-child-button {
+  align-self: end;
 }
 
 .child-row-details {
